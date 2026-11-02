@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrbitBill</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #14181f; --muted: #5d6675; --line: #e2e6ec;
+    --accent: #1f6feb; --warn: #c2410c; --warn-bg: #fff1e6; --ok: #15803d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --card: #161b22; --ink: #e6edf3; --muted: #8b95a5; --line: #2a313c;
+            --accent: #58a6ff; --warn: #ffa657; --warn-bg: #2a1d10; --ok: #56d364; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 20px 24px 4px; max-width: 1100px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px 24px 40px; display: grid; gap: 16px;
+         grid-template-columns: repeat(12, 1fr); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .span4 { grid-column: span 4; } .span5 { grid-column: span 5; } .span7 { grid-column: span 7; }
+  .span8 { grid-column: span 8; } .span12 { grid-column: span 12; }
+  @media (max-width: 800px) { main { padding: 12px 16px 32px; } .span4,.span5,.span7,.span8 { grid-column: span 12; } }
+  h2 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  .big { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  select, input[type=number], input[type=text] { width: 100%; padding: 8px 10px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  button { margin-top: 12px; padding: 9px 14px; border: 0; border-radius: 7px; background: var(--accent);
+           color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .check { display: flex; gap: 6px; align-items: center; margin-top: 10px; font-size: 14px; color: var(--ink); }
+  .check input { width: auto; }
+  .anom { background: var(--warn-bg); border-left: 3px solid var(--warn); padding: 8px 10px; border-radius: 6px;
+          margin-bottom: 8px; font-size: 13px; }
+  .anom b { color: var(--warn); }
+  .flow { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); margin-top: 10px; white-space: pre-wrap; }
+  .flow .ok { color: var(--ok); }
+  .answer { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; min-height: 60px; }
+  .tag { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 5px 0; border-bottom: 1px solid var(--line); } td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  footer { max-width: 1100px; margin: 0 auto; padding: 0 24px 24px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OrbitBill</h1>
+  <p>AI-assisted convergent charging for satellite imagery &middot; account <b>acme-maritime</b> &middot; all data simulated</p>
+</header>
+<main>
+  <section class="card span4">
+    <h2>Available balance</h2>
+    <div class="big" id="avail">-</div>
+    <div class="sub" id="balsub"></div>
+    <div class="sub" id="free" style="margin-top:6px"></div>
+  </section>
+  <section class="card span4">
+    <h2>Billed this period</h2>
+    <div class="big" id="total">-</div>
+    <div class="sub" id="evts"></div>
+  </section>
+  <section class="card span4">
+    <h2>Anomalies</h2>
+    <div class="big" id="ncount">-</div>
+    <div class="sub">IsolationForest + robust z-score</div>
+  </section>
+
+  <section class="card span8">
+    <h2>Daily spend (EUR)</h2>
+    <canvas id="chart" height="110"></canvas>
+  </section>
+  <section class="card span4">
+    <h2>Spend by product</h2>
+    <table id="byprod"></table>
+    <h2 style="margin-top:16px">Recent charges</h2>
+    <table id="recent"></table>
+  </section>
+
+  <section class="card span5">
+    <h2>Request a tasking (online charging)</h2>
+    <label for="product">Product</label>
+    <select id="product">
+      <option value="spot">Spot - high-res single scene</option>
+      <option value="strip">Strip - long acquisition</option>
+      <option value="scan">Scan - wide area</option>
+      <option value="archive">Archive download</option>
+    </select>
+    <label for="area">Area (km&sup2;)</label>
+    <input id="area" type="number" value="25" min="1" max="5000">
+    <label for="res">Resolution (m)</label>
+    <select id="res"><option>0.25</option><option>0.5</option><option selected>1.0</option><option>3.0</option></select>
+    <label class="check"><input id="rush" type="checkbox"> Rush priority</label>
+    <div class="row">
+      <button id="go">Reserve &amp; commit</button>
+      <button id="spike" class="ghost">Re-simulate with spike</button>
+      <button id="clean" class="ghost">Re-simulate clean</button>
+    </div>
+    <div class="flow" id="flow"></div>
+  </section>
+
+  <section class="card span7">
+    <h2>Anomalies &amp; bill assistant</h2>
+    <div id="anoms"></div>
+    <div class="row" style="margin-top:6px">
+      <input type="text" id="q" value="Why is my bill so high?" style="flex:1; min-width:200px">
+      <button id="ask" style="margin-top:0">Explain</button>
+    </div>
+    <div class="answer" id="answer">Ask a question about the bill.</div>
+    <div class="tag" id="src"></div>
+  </section>
+</main>
+<footer>Independent portfolio project &middot; simulated data &middot; not affiliated with any satellite operator.</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const eur = n => n.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+let chart;
+
+async function api(path, opts) { const r = await fetch(path, opts); return {ok: r.ok, status: r.status, data: await r.json()}; }
+
+async function refresh() {
+  const {data: s} = await api("/api/summary");
+  $("avail").textContent = eur(s.available) + " EUR";
+  $("balsub").textContent = `balance ${eur(s.balance)} - reserved ${eur(s.reserved)}`;
+  $("free").textContent = `free archive left: ${s.free_archive_left.toFixed(0)} km²`;
+  $("total").textContent = eur(s.total_spend) + " EUR";
+  $("evts").textContent = `${s.events} billed requests`;
+  $("ncount").textContent = s.anomalies.length;
+  $("byprod").innerHTML = Object.entries(s.spend_by_product).map(([k, v]) => `<tr><td>${k}</td><td>${eur(v)}</td></tr>`).join("");
+  $("recent").innerHTML = s.recent.map(r => `<tr><td>${r.note}</td><td>${eur(r.charged)}</td></tr>`).join("");
+  $("anoms").innerHTML = s.anomalies.length
+    ? s.anomalies.map(a => `<div class="anom"><b>Day ${a.day}</b> - ${a.events} requests, ${eur(a.spend)} EUR. ${a.reason}</div>`).join("")
+    : `<div class="sub">No unusual usage detected.</div>`;
+  const anomDays = new Set(s.anomalies.map(a => a.day));
+  const styles = getComputedStyle(document.documentElement);
+  const colors = s.daily_spend.map(d => anomDays.has(d.day) ? styles.getPropertyValue("--warn").trim() : styles.getPropertyValue("--accent").trim());
+  const cfg = {type: "bar",
+    data: {labels: s.daily_spend.map(d => d.day), datasets: [{data: s.daily_spend.map(d => d.spend), backgroundColor: colors, borderRadius: 3}]},
+    options: {plugins: {legend: {display: false}}, scales: {x: {title: {display: true, text: "day"}}, y: {beginAtZero: true}}}};
+  if (chart) chart.destroy();
+  chart = new Chart($("chart"), cfg);
+}
+
+$("go").onclick = async () => {
+  const body = {product: $("product").value, area_km2: +$("area").value, resolution_m: +$("res").value, rush: $("rush").checked};
+  const r = await api("/api/task", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  if (!r.ok) { $("flow").textContent = `REJECTED (${r.status}): ${r.data.detail || JSON.stringify(r.data)}`; return; }
+  $("flow").innerHTML = r.data.steps.map(s => `<span class="ok">${s.step.toUpperCase()}</span> ${eur(s.amount)} EUR -> available ${eur(s.available)}`).join("\n")
+    + `\n${r.data.event_id}: ${r.data.note}`;
+  refresh();
+};
+const sim = spike => async () => { await api("/api/simulate?spike=" + spike, {method: "POST"}); $("flow").textContent = ""; refresh(); };
+$("spike").onclick = sim(true); $("clean").onclick = sim(false);
+$("ask").onclick = async () => {
+  $("answer").textContent = "Thinking...";
+  const r = await api("/api/explain", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({question: $("q").value})});
+  $("answer").textContent = r.data.answer;
+  $("src").textContent = r.data.source === "claude" ? "Answered by Claude" : "Offline template (set ANTHROPIC_API_KEY to use Claude)";
+};
+refresh();
+</script>
+</body>
+</html>
