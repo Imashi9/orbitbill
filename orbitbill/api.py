@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -68,15 +67,20 @@ def summary():
 def task(req: TaskRequest):
     """Request a new acquisition: reserve funds, 'deliver', then commit."""
     _counter["n"] += 1
+    ledger = engine.accounts[ACCOUNT].ledger
+    now = max((e.timestamp for e in ledger), default=0.0)  # simulation clock, not wall-clock
     ev = UsageEvent(f"live-{_counter['n']:05d}", ACCOUNT, req.product, req.area_km2,
-                    req.resolution_m, req.rush, time.time())
+                    req.resolution_m, req.rush, now)
     try:
         res = engine.reserve(ev)
     except InsufficientBalance as exc:
         raise HTTPException(402, str(exc))
-    steps = [{"step": "reserve", "amount": res.amount, "available": engine.accounts[ACCOUNT].available}]
+    acct = engine.accounts[ACCOUNT]
+    steps = [{"step": "reserve", "amount": res.amount, "balance": acct.balance, "held": acct.reserved,
+              "available": acct.available}]
     entry = engine.commit(ev.event_id)
-    steps.append({"step": "commit", "amount": entry.charged, "available": engine.accounts[ACCOUNT].available})
+    steps.append({"step": "commit", "amount": entry.charged, "balance": acct.balance, "held": acct.reserved,
+                  "available": acct.available})
     return {"event_id": ev.event_id, "note": entry.note, "charged": entry.charged, "steps": steps}
 
 

@@ -153,7 +153,7 @@ $("go").onclick = async () => {
   const body = {product: $("product").value, area_km2: +$("area").value, resolution_m: +$("res").value, rush: $("rush").checked};
   const r = await api("/api/task", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
   if (!r.ok) { $("flow").textContent = `REJECTED (${r.status}): ${r.data.detail || JSON.stringify(r.data)}`; return; }
-  $("flow").innerHTML = r.data.steps.map(s => `<span class="ok">${s.step.toUpperCase()}</span> ${eur(s.amount)} EUR -> available ${eur(s.available)}`).join("\n")
+  $("flow").innerHTML = r.data.steps.map(s => `<span class="ok">${s.step.toUpperCase()}</span> ${eur(s.amount)} EUR | balance ${eur(s.balance)} | held ${eur(s.held)}`).join("\n")
     + `\n${r.data.event_id}: ${r.data.note}`;
   refresh();
 };
@@ -166,6 +166,8 @@ $("ask").onclick = async () => {
   $("src").textContent = r.data.source === "claude" ? "Answered by Claude" : "Offline template (set ANTHROPIC_API_KEY to use Claude)";
 };
 refresh();
+// #demo auto-plays one tasking request and one question (used for README screenshots)
+if (location.hash === "#demo") setTimeout(() => { $("rush").checked = true; $("go").click(); setTimeout(() => $("ask").click(), 500); }, 600);
 </script>
 </body>
 </html>

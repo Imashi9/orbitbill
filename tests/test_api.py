@@ -30,3 +30,10 @@ def test_explain_endpoint(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     r = client.post("/api/explain", json={}).json()
     assert r["source"] == "template" and r["answer"]
+
+
+def test_live_request_stays_inside_simulation_days():
+    client.post("/api/simulate?spike=false")
+    client.post("/api/task", json={"product": "spot", "area_km2": 10})
+    days = [d["day"] for d in client.get("/api/summary").json()["daily_spend"]]
+    assert max(days) < 60
